@@ -243,6 +243,21 @@ function knownRequesters(){
 function knownItems(){
   return [...new Set(state.items.map(i=>i.item).filter(Boolean))];
 }
+function itemsForRequester(name){
+  if(!name) return [];
+  return [...new Set(state.items.filter(i=>i.requester===name).map(i=>i.item).filter(Boolean))];
+}
+function renderItemChipsHTML(requesterName){
+  const personal = itemsForRequester(requesterName);
+  if(personal.length){
+    return `<div class="attach-hint" style="margin-bottom:4px">${escapeHtml(requesterName)} 之前申請過：</div>
+      <div class="chip-row">${personal.map(i=>`<button type="button" class="chip" data-pick-item="${escapeHtml(i)}">${escapeHtml(i)}</button>`).join('')}</div>`;
+  }
+  if(state.itemList && state.itemList.length){
+    return `<div class="chip-row">${state.itemList.map(i=>`<button type="button" class="chip" data-pick-item="${escapeHtml(i)}">${escapeHtml(i)}</button>`).join('')}</div>`;
+  }
+  return `<div class="attach-hint">尚無常用項目，輸入並儲存後會自動加入清單</div>`;
+}
 
 function exportCSV(){
   const header = ['單號','日期(民國)','申請單位','申請人','項目用途','金額','支付方式','匯費','總計','指定捐款','指定單位','狀態','備註'];
@@ -272,6 +287,82 @@ function exportCSV(){
   a.download = `請購單簽核紀錄_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.csv`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function parseCSVText(text){
+  text = text.replace(/^\uFEFF/, '');
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i], next = text[i+1];
+    if(inQuotes){
+      if(c==='"' && next==='"'){ field+='"'; i++; }
+      else if(c==='"'){ inQuotes=false; }
+      else { field+=c; }
+    } else {
+      if(c==='"'){ inQuotes=true; }
+      else if(c===','){ row.push(field); field=''; }
+      else if(c==='\r'){ /* skip */ }
+      else if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else { field+=c; }
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r=> r.length>1 || (r.length===1 && r[0]!==''));
+}
+
+function minguoStrToISO(str){
+  if(!str) return '';
+  const m = str.match(/(\d+)[\/\-](\d+)[\/\-](\d+)/);
+  if(!m) return '';
+  return minguoToISO(m[1], m[2], m[3]);
+}
+
+async function importCSV(file){
+  const text = await file.text();
+  const rows = parseCSVText(text);
+  if(rows.length < 2){ alert('檔案內容是空的，或格式無法辨識。'); return; }
+  const header = rows[0];
+  const idx = name => header.indexOf(name);
+  const required = ['單號','日期(民國)','申請人'];
+  if(required.some(r=>idx(r)===-1)){
+    alert('找不到必要欄位（單號／日期(民國)／申請人），請確認匯入的是本工具匯出的 CSV 檔。');
+    return;
+  }
+  const existingNos = new Set(state.items.map(i=>i.no));
+  let added = 0, skipped = 0;
+  for(let r=1;r<rows.length;r++){
+    const row = rows[r];
+    const get = name => { const i = idx(name); return i===-1 ? '' : (row[i]||''); };
+    const no = get('單號');
+    if(!no || existingNos.has(no)){ skipped++; continue; }
+    const data = {
+      no,
+      date: minguoStrToISO(get('日期(民國)')),
+      unit: UNIT_OPTIONS.includes(get('申請單位')) ? get('申請單位') : (get('申請單位') ? '其他' : ''),
+      unitOther: UNIT_OPTIONS.includes(get('申請單位')) ? '' : get('申請單位'),
+      requester: get('申請人'),
+      item: get('項目用途'),
+      amount: get('金額'),
+      payMethod: get('支付方式') || '現金',
+      transferFee: get('匯費'),
+      designated: get('指定捐款')==='是',
+      designatedUnit: get('指定單位'),
+      notes: get('備註')
+    };
+    if(!data.requester){ skipped++; continue; }
+    const item = newItem(data);
+    state.items.push(item);
+    existingNos.add(no);
+    if(!state.requesterList) state.requesterList = [];
+    if(!state.itemList) state.itemList = [];
+    if(data.requester && !state.requesterList.includes(data.requester)) state.requesterList.push(data.requester);
+    if(data.item && !state.itemList.includes(data.item)) state.itemList.push(data.item);
+    added++;
+  }
+  await saveData();
+  render();
+  alert(`匯入完成：新增 ${added} 筆，略過 ${skipped} 筆（單號重複或資料不完整）。\n附加文件與簽核進度不會匯入，請於明細頁個別補上。`);
 }
 
 function itemStatus(it){
@@ -343,6 +434,8 @@ function render(){
         <p class="sub">家長會財務組・六步驟簽核流程追蹤</p>
       </div>
       <div class="actions">
+        <button class="btn-ghost" id="btnImport">匯入資料</button>
+        <input type="file" id="importFileInput" accept=".csv" style="display:none">
         <button class="btn-ghost" id="btnExport">匯出資料</button>
         <button class="btn-ghost" id="btnStartNo">設定起始編號</button>
         <button class="btn-ghost" id="btnManageRequesters">管理申請人</button>
@@ -405,6 +498,11 @@ function render(){
   document.getElementById('btnManageRequesters').onclick = ()=>{ tempListEdit = [...(state.requesterList||[])]; ui.modal='manageRequesters'; renderModal(); };
   document.getElementById('btnManageItems').onclick = ()=>{ tempListEdit = [...(state.itemList||[])]; ui.modal='manageItems'; renderModal(); };
   document.getElementById('btnExport').onclick = exportCSV;
+  document.getElementById('btnImport').onclick = ()=>{ document.getElementById('importFileInput').click(); };
+  document.getElementById('importFileInput').onchange = (e)=>{
+    if(e.target.files && e.target.files[0]){ importCSV(e.target.files[0]); }
+    e.target.value = '';
+  };
   document.getElementById('search').oninput = (e)=>{ ui.search = e.target.value; render(); };
   document.getElementById('filter').onchange = (e)=>{ ui.statusFilter = e.target.value; render(); };
   document.querySelectorAll('tbody tr').forEach(tr=>{
@@ -574,7 +672,7 @@ function renderModal(){
         </div>
         <div class="field"><label>項目／用途</label>
           <input type="text" id="f_item" placeholder="輸入項目／用途">
-          ${(state.itemList&&state.itemList.length) ? `<div class="chip-row">${state.itemList.map(i=>`<button type="button" class="chip" data-pick-item="${escapeHtml(i)}">${escapeHtml(i)}</button>`).join('')}</div>` : `<div class="attach-hint">尚無常用項目，輸入並儲存後會自動加入清單</div>`}
+          <div id="itemChipsWrap">${renderItemChipsHTML('')}</div>
         </div>
         <div class="field"><label>支付方式</label>
           <div class="radio-group">
@@ -609,11 +707,20 @@ function renderModal(){
       document.getElementById('f_designatedUnitWrap').style.display = e.target.checked ? 'block':'none';
     };
     div.querySelectorAll('[data-pick-requester]').forEach(btn=>{
-      btn.onclick = ()=>{ document.getElementById('f_requester').value = btn.dataset.pickRequester; };
+      btn.onclick = ()=>{ document.getElementById('f_requester').value = btn.dataset.pickRequester; refreshItemChips(); };
     });
-    div.querySelectorAll('[data-pick-item]').forEach(btn=>{
-      btn.onclick = ()=>{ document.getElementById('f_item').value = btn.dataset.pickItem; };
-    });
+    const bindItemChips = ()=>{
+      div.querySelectorAll('[data-pick-item]').forEach(btn=>{
+        btn.onclick = ()=>{ document.getElementById('f_item').value = btn.dataset.pickItem; };
+      });
+    };
+    const refreshItemChips = ()=>{
+      document.getElementById('itemChipsWrap').innerHTML = renderItemChipsHTML(document.getElementById('f_requester').value.trim());
+      bindItemChips();
+    };
+    bindItemChips();
+    document.getElementById('f_requester').addEventListener('input', refreshItemChips);
+    document.getElementById('f_requester').addEventListener('blur', refreshItemChips);
     const updateTotal = ()=>{
       const checked = div.querySelector('input[name="f_pay"]:checked').value;
       const total = computeTotalAmount(
@@ -700,7 +807,7 @@ function renderModal(){
         </div>
         <div class="field"><label>項目／用途</label>
           <input type="text" id="f_item" value="${escapeHtml(it.item)}" placeholder="輸入項目／用途">
-          ${(state.itemList&&state.itemList.length) ? `<div class="chip-row">${state.itemList.map(i=>`<button type="button" class="chip" data-pick-item="${escapeHtml(i)}">${escapeHtml(i)}</button>`).join('')}</div>` : ''}
+          <div id="itemChipsWrap">${renderItemChipsHTML(it.requester)}</div>
         </div>
         <div class="field"><label>支付方式</label>
           <div class="radio-group">
@@ -732,11 +839,20 @@ function renderModal(){
       document.getElementById('f_designatedUnitWrap').style.display = e.target.checked ? 'block':'none';
     };
     div.querySelectorAll('[data-pick-requester]').forEach(btn=>{
-      btn.onclick = ()=>{ document.getElementById('f_requester').value = btn.dataset.pickRequester; };
+      btn.onclick = ()=>{ document.getElementById('f_requester').value = btn.dataset.pickRequester; refreshItemChips2(); };
     });
-    div.querySelectorAll('[data-pick-item]').forEach(btn=>{
-      btn.onclick = ()=>{ document.getElementById('f_item').value = btn.dataset.pickItem; };
-    });
+    const bindItemChips2 = ()=>{
+      div.querySelectorAll('[data-pick-item]').forEach(btn=>{
+        btn.onclick = ()=>{ document.getElementById('f_item').value = btn.dataset.pickItem; };
+      });
+    };
+    const refreshItemChips2 = ()=>{
+      document.getElementById('itemChipsWrap').innerHTML = renderItemChipsHTML(document.getElementById('f_requester').value.trim());
+      bindItemChips2();
+    };
+    bindItemChips2();
+    document.getElementById('f_requester').addEventListener('input', refreshItemChips2);
+    document.getElementById('f_requester').addEventListener('blur', refreshItemChips2);
     const updateTotal2 = ()=>{
       const checked = div.querySelector('input[name="f_pay"]:checked').value;
       const total = computeTotalAmount(
