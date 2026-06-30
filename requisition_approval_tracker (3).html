@@ -479,6 +479,7 @@ async function renderDetail(){
       </div>
 
       <div class="panel-footer">
+        <button class="btn-ghost" id="btnEdit">編輯內容</button>
         ${!it.returned ? `<button class="btn-ghost" id="btnReturn">標記退回</button>` : `<button class="btn-ghost" id="btnUnreturn">取消退回</button>`}
         <button class="btn-ghost danger" id="btnDelete">刪除此筆</button>
       </div>
@@ -488,6 +489,7 @@ async function renderDetail(){
 
   document.getElementById('closeDetail').onclick = ()=>{ closeOverlayLayer('detail'); };
   div.onclick = (e)=>{ if(e.target===div) closeOverlayLayer('detail'); };
+  document.getElementById('btnEdit').onclick = ()=>{ ui.modal='edit'; ui.editItemId=it.id; renderModal(); };
 
   div.querySelectorAll('[data-action="mark"]').forEach(chop=>{
     chop.onclick = ()=>{
@@ -663,6 +665,123 @@ function renderModal(){
       }
       closeOverlayLayer('modal');
       render();
+    };
+  }
+
+  if(ui.modal==='edit'){
+    const it = state.items.find(i=>i.id===ui.editItemId);
+    if(!it){ return; }
+    const md = it.date ? (()=>{ const [y,m,d]=it.date.split('-').map(Number); return {y:y-1911,m,d}; })() : todayMinguo();
+    div.innerHTML = `
+      <div class="modal">
+        <h2>編輯請購單<button class="close" id="closeModal">×</button></h2>
+        <div class="row2">
+          <div class="field"><label>單號</label><input type="text" id="f_no" value="${escapeHtml(it.no)}"></div>
+          <div class="field"><label>日期（民國）</label>
+            <div style="display:flex;gap:5px;align-items:center;">
+              <input type="number" id="f_dateY" value="${md.y}" min="1" style="width:58px">
+              <span>年</span>
+              <select id="f_dateM">${Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}" ${m===md.m?'selected':''}>${m}</option>`).join('')}</select>
+              <span>月</span>
+              <select id="f_dateD">${Array.from({length:31},(_,i)=>i+1).map(d=>`<option value="${d}" ${d===md.d?'selected':''}>${d}</option>`).join('')}</select>
+              <span>日</span>
+            </div>
+          </div>
+        </div>
+        <div class="field"><label>申請單位</label>
+          <select id="f_unit">
+            ${UNIT_OPTIONS.map(u=>`<option value="${u}" ${u===it.unit?'selected':''}>${u}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field" id="f_unitOtherWrap" style="display:${it.unit==='其他'?'block':'none'}"><label>其他單位名稱</label><input type="text" id="f_unitOther" value="${escapeHtml(it.unitOther||'')}"></div>
+        <div class="field"><label>申請人</label>
+          <input type="text" id="f_requester" value="${escapeHtml(it.requester)}" placeholder="輸入申請人姓名">
+          ${(state.requesterList&&state.requesterList.length) ? `<div class="chip-row">${state.requesterList.map(r=>`<button type="button" class="chip" data-pick-requester="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('')}</div>` : ''}
+        </div>
+        <div class="field"><label>項目／用途</label>
+          <input type="text" id="f_item" value="${escapeHtml(it.item)}" placeholder="輸入項目／用途">
+          ${(state.itemList&&state.itemList.length) ? `<div class="chip-row">${state.itemList.map(i=>`<button type="button" class="chip" data-pick-item="${escapeHtml(i)}">${escapeHtml(i)}</button>`).join('')}</div>` : ''}
+        </div>
+        <div class="field"><label>支付方式</label>
+          <div class="radio-group">
+            <label><input type="radio" name="f_pay" value="現金" ${it.payMethod==='現金'?'checked':''}>現金</label>
+            <label><input type="radio" name="f_pay" value="匯款" ${it.payMethod==='匯款'?'checked':''}>匯款</label>
+          </div>
+        </div>
+        <div class="field" id="f_feeWrap" style="display:${it.payMethod==='匯款'?'block':'none'}"><label>匯費</label><input type="number" id="f_transferFee" value="${it.transferFee||0}"></div>
+        <div class="field"><label>金額</label><input type="number" id="f_amount" value="${it.amount||0}"></div>
+        <div class="field"><label>總計（金額＋匯費）</label>
+          <input type="text" id="f_total" readonly value="${Number(it.totalAmount!==undefined?it.totalAmount:it.amount||0).toLocaleString()}" style="background:var(--paper-edge);color:var(--ink-soft);font-family:'JetBrains Mono',monospace">
+        </div>
+        <div class="field"><label class="radio-group" style="margin-top:0"><input type="checkbox" id="f_designated" ${it.designated?'checked':''}> 指定捐款</label></div>
+        <div class="field" id="f_designatedUnitWrap" style="display:${it.designated?'block':'none'}"><label>指定單位</label><input type="text" id="f_designatedUnit" value="${escapeHtml(it.designatedUnit||'')}"></div>
+        <div class="field"><label>備註（選填）</label><textarea id="f_notes">${escapeHtml(it.notes||'')}</textarea></div>
+        <div class="panel-footer">
+          <button class="btn" id="saveEdit">儲存修改</button>
+          <button class="btn-ghost" id="cancelEdit">取消</button>
+        </div>
+      </div>`;
+    document.body.appendChild(div);
+    document.getElementById('closeModal').onclick = ()=>closeOverlayLayer('modal');
+    document.getElementById('cancelEdit').onclick = ()=>closeOverlayLayer('modal');
+    div.onclick=(e)=>{ if(e.target===div) closeOverlayLayer('modal'); };
+    document.getElementById('f_unit').onchange = (e)=>{
+      document.getElementById('f_unitOtherWrap').style.display = e.target.value==='其他' ? 'block':'none';
+    };
+    document.getElementById('f_designated').onchange = (e)=>{
+      document.getElementById('f_designatedUnitWrap').style.display = e.target.checked ? 'block':'none';
+    };
+    div.querySelectorAll('[data-pick-requester]').forEach(btn=>{
+      btn.onclick = ()=>{ document.getElementById('f_requester').value = btn.dataset.pickRequester; };
+    });
+    div.querySelectorAll('[data-pick-item]').forEach(btn=>{
+      btn.onclick = ()=>{ document.getElementById('f_item').value = btn.dataset.pickItem; };
+    });
+    const updateTotal2 = ()=>{
+      const checked = div.querySelector('input[name="f_pay"]:checked').value;
+      const total = computeTotalAmount(
+        document.getElementById('f_amount').value,
+        checked,
+        document.getElementById('f_transferFee').value
+      );
+      document.getElementById('f_total').value = total.toLocaleString();
+    };
+    div.querySelectorAll('input[name="f_pay"]').forEach(r=>{
+      r.onchange = ()=>{
+        const checked = div.querySelector('input[name="f_pay"]:checked').value;
+        document.getElementById('f_feeWrap').style.display = checked==='匯款' ? 'block':'none';
+        updateTotal2();
+      };
+    });
+    document.getElementById('f_amount').oninput = updateTotal2;
+    document.getElementById('f_transferFee').oninput = updateTotal2;
+    document.getElementById('saveEdit').onclick = async ()=>{
+      const requester = document.getElementById('f_requester').value.trim();
+      if(!requester){ alert('請至少填寫申請人'); return; }
+      const y = document.getElementById('f_dateY').value;
+      const m = document.getElementById('f_dateM').value;
+      const d = document.getElementById('f_dateD').value;
+      it.no = document.getElementById('f_no').value.trim() || it.no;
+      it.date = minguoToISO(y,m,d);
+      it.unit = document.getElementById('f_unit').value;
+      it.unitOther = document.getElementById('f_unitOther').value.trim();
+      it.requester = requester;
+      it.item = document.getElementById('f_item').value.trim();
+      it.amount = document.getElementById('f_amount').value;
+      it.designated = document.getElementById('f_designated').checked;
+      it.designatedUnit = document.getElementById('f_designatedUnit').value.trim();
+      it.payMethod = div.querySelector('input[name="f_pay"]:checked').value;
+      it.transferFee = document.getElementById('f_transferFee').value;
+      it.totalAmount = computeTotalAmount(it.amount, it.payMethod, it.transferFee);
+      it.notes = document.getElementById('f_notes').value.trim();
+      if(!state.requesterList) state.requesterList = [];
+      if(!state.itemList) state.itemList = [];
+      if(it.requester && !state.requesterList.includes(it.requester)) state.requesterList.push(it.requester);
+      if(it.item && !state.itemList.includes(it.item)) state.itemList.push(it.item);
+      await saveData();
+      closeOverlayLayer('modal');
+      render();
+      renderDetail();
     };
   }
 
