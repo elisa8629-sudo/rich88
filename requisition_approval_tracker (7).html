@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>請購單暨黏貼憑證 簽核紀錄</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAFAF7;
+    --paper-edge:#EFEDE6;
+    --ink:#1C1B19;
+    --ink-soft:#5B6168;
+    --rule:#D8D6CC;
+    --chop:#B3262A;
+    --chop-soft:#B3262A1A;
+    --jade:#3F6B52;
+    --jade-soft:#3F6B5214;
+    --brass:#A8793A;
+    --brass-soft:#A8793A1A;
+    --returned:#8C3A3A;
+    --returned-soft:#8C3A3A14;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Noto Sans TC', sans-serif;
+    color:var(--ink);
+    background:var(--paper);
+    background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 35px, var(--rule) 35px, var(--rule) 36px);
+    min-height:100vh;
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:32px 24px 80px;}
+  header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:22px;border-bottom:2px solid var(--ink);padding-bottom:14px;}
+  h1{font-family:'Noto Serif TC',serif;font-weight:700;font-size:24px;margin:0 0 4px;letter-spacing:.5px;}
+  .sub{color:var(--ink-soft);font-size:13px;margin:0;}
+  .actions{display:flex;gap:10px;}
+  button{font-family:inherit;cursor:pointer;border-radius:3px;}
+  .btn{background:var(--ink);color:var(--paper);border:none;padding:9px 16px;font-size:13.5px;font-weight:500;}
+  .btn:hover{background:#000;}
+  .btn-ghost{background:transparent;border:1.3px solid var(--rule);color:var(--ink-soft);padding:8px 14px;font-size:13px;}
+  .btn-ghost:hover{border-color:var(--ink-soft);color:var(--ink);}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--rule);margin-bottom:24px;border:1px solid var(--rule);}
+  .stat{background:var(--paper);padding:14px 16px;}
+  .stat .num{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:600;line-height:1;}
+  .stat .label{font-size:12px;color:var(--ink-soft);margin-top:5px;}
+  .stat.pending .num{color:var(--brass);}
+  .stat.progress .num{color:var(--chop);}
+  .stat.done .num{color:var(--jade);}
+
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .toolbar input[type=text]{flex:1;min-width:180px;padding:8px 10px;border:1.3px solid var(--rule);border-radius:3px;font-size:13.5px;font-family:inherit;background:var(--paper);}
+  .toolbar select{padding:8px 10px;border:1.3px solid var(--rule);border-radius:3px;font-size:13.5px;font-family:inherit;background:var(--paper);}
+  .gear{font-size:12px;color:var(--ink-soft);background:none;border:none;text-decoration:underline;padding:4px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  thead th{text-align:left;font-weight:500;color:var(--ink-soft);font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid var(--ink);padding:8px 10px;}
+  tbody td{padding:11px 10px;border-bottom:1px solid var(--rule);vertical-align:middle;}
+  tbody tr{cursor:pointer;}
+  tbody tr:hover{background:var(--paper-edge);}
+  .no{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink-soft);}
+  .amt{font-family:'JetBrains Mono',monospace;text-align:right;}
+  .dots{display:flex;gap:4px;}
+  .dot{width:9px;height:9px;border-radius:50%;border:1.4px solid var(--rule);}
+  .dot.on{background:var(--chop);border-color:var(--chop);}
+  .pill{display:inline-block;font-size:11.5px;padding:3px 9px;border-radius:20px;font-weight:600;}
+  .pill.pending{background:var(--brass-soft);color:var(--brass);}
+  .pill.progress{background:var(--chop-soft);color:var(--chop);}
+  .pill.done{background:var(--jade-soft);color:var(--jade);}
+  .pill.returned{background:var(--returned-soft);color:var(--returned);}
+  .unit-badge{font-size:11px;padding:2px 7px;border-radius:3px;background:var(--paper-edge);color:var(--ink-soft);border:1px solid var(--rule);white-space:nowrap;}
+
+  .empty{text-align:center;padding:60px 20px;color:var(--ink-soft);}
+  .empty .big{font-family:'Noto Serif TC',serif;font-size:18px;color:var(--ink);margin-bottom:6px;}
+
+  /* overlay + panels */
+  .overlay{position:fixed;inset:0;background:rgba(28,27,25,.45);display:flex;justify-content:flex-end;z-index:50;}
+  .overlay.center{justify-content:center;align-items:center;}
+  .panel{background:var(--paper);width:420px;max-width:92vw;height:100%;overflow-y:auto;padding:26px;box-shadow:-8px 0 24px rgba(0,0,0,.15);}
+  .modal{background:var(--paper);width:420px;max-width:92vw;border-radius:5px;padding:26px;box-shadow:0 12px 32px rgba(0,0,0,.2);}
+  .panel h2,.modal h2{font-family:'Noto Serif TC',serif;font-size:18px;margin:0 0 18px;display:flex;justify-content:space-between;align-items:center;}
+  .close{background:none;border:none;font-size:20px;color:var(--ink-soft);}
+  .field{margin-bottom:13px;}
+  .field label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px;}
+  .field input,.field textarea{width:100%;padding:8px 9px;border:1.3px solid var(--rule);border-radius:3px;font-size:13.5px;font-family:inherit;background:#fff;}
+  .field textarea{resize:vertical;min-height:50px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .radio-group{display:flex;gap:16px;margin-top:5px;}
+  .radio-group label{display:flex;align-items:center;gap:5px;font-size:13.5px;font-weight:400;color:var(--ink);cursor:pointer;}
+  .field select{width:100%;padding:8px 9px;border:1.3px solid var(--rule);border-radius:3px;font-size:13.5px;font-family:inherit;background:#fff;}
+  .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
+  .chip{font-size:12px;padding:4px 11px;border-radius:14px;border:1.2px solid var(--rule);background:var(--paper-edge);color:var(--ink-soft);}
+  .chip:hover{border-color:var(--brass);color:var(--brass);background:var(--brass-soft);}
+
+  .meta-line{font-size:13px;color:var(--ink-soft);margin-bottom:18px;line-height:1.6;}
+  .meta-line b{color:var(--ink);font-weight:600;}
+
+  .stepper{display:flex;flex-direction:column;gap:0;margin:18px 0;}
+  .step{display:flex;gap:14px;position:relative;padding-bottom:22px;}
+  .step:last-child{padding-bottom:0;}
+  .step::before{content:'';position:absolute;left:21px;top:46px;bottom:0;width:2px;background:var(--rule);}
+  .step:last-child::before{display:none;}
+  .chop{
+    width:40px;height:40px;border-radius:8px;flex:none;
+    border:2px solid var(--rule);color:var(--ink-soft);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Noto Serif TC',serif;font-weight:700;font-size:14px;
+    background:#fff;position:relative;z-index:1;
+  }
+  .chop.pending{cursor:pointer;border:2px dashed var(--brass);color:var(--brass);}
+  .chop.pending:hover{background:var(--brass-soft);}
+  .chop.done{
+    border-radius:50%;
+    background:var(--chop);border-color:var(--chop);color:#fff;
+    transform:rotate(-6deg);
+    box-shadow:0 0 0 1px rgba(179,38,42,.25), inset 0 0 8px rgba(0,0,0,.18);
+    animation:stamp .35s ease-out;
+    font-size:19px;
+  }
+  @keyframes stamp{0%{transform:scale(1.7) rotate(-18deg);opacity:0;}60%{transform:scale(.92) rotate(-2deg);opacity:1;}100%{transform:scale(1) rotate(-6deg);}}
+  .step-body{padding-top:6px;}
+  .step-name{font-weight:600;font-size:14px;}
+  .step-detail{font-size:12.5px;color:var(--ink-soft);margin-top:2px;}
+  .step-hint{font-size:12px;color:var(--brass);margin-top:2px;}
+  .sign-form{display:flex;gap:6px;margin-top:8px;}
+  .sign-form input{flex:1;padding:6px 8px;border:1.3px solid var(--rule);border-radius:3px;font-size:12.5px;}
+  .sign-form button{font-size:12px;padding:6px 10px;background:var(--ink);color:#fff;border:none;border-radius:3px;}
+
+  .panel-footer{display:flex;gap:10px;margin-top:20px;border-top:1px solid var(--rule);padding-top:16px;}
+  .danger{color:var(--returned);}
+  .returned-banner{background:var(--returned-soft);color:var(--returned);padding:10px 12px;border-radius:3px;font-size:13px;margin-bottom:16px;}
+
+  .attach-section{margin:20px 0 0;border-top:1px dashed var(--rule);padding-top:16px;}
+  .attach-section h3{font-size:13px;margin:0 0 10px;color:var(--ink-soft);font-weight:600;}
+  .attach-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
+  .attach-item{display:flex;align-items:center;gap:8px;font-size:12.5px;background:var(--paper-edge);padding:7px 10px;border-radius:3px;}
+  .attach-item a{color:var(--ink);text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .attach-item a:hover{text-decoration:underline;}
+  .attach-item .sz{color:var(--ink-soft);font-family:'JetBrains Mono',monospace;font-size:11px;flex:none;}
+  .attach-item button{background:none;border:none;color:var(--returned);font-size:12px;flex:none;}
+  .attach-upload{font-size:12.5px;}
+  .attach-hint{font-size:11px;color:var(--ink-soft);margin-top:6px;}
+
+  /* full-page form view */
+  .page-form{display:none;position:fixed;inset:0;background:var(--paper);z-index:60;overflow-y:auto;}
+  .page-form.active{display:block;}
+  .page-form-inner{max-width:700px;margin:0 auto;padding:32px 24px 80px;}
+  .page-form-header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:28px;}
+  .page-form-header h2{font-family:'Noto Serif TC',serif;font-size:22px;margin:0;}
+  .form-section{border:1px solid var(--rule);border-radius:4px;padding:18px 20px;margin-bottom:18px;background:#fff;}
+  .form-section-title{font-family:'Noto Serif TC',serif;font-size:13px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;margin:0 0 14px;padding-bottom:8px;border-bottom:1px solid var(--rule);}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  .designated-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px;}
+  .designated-chip{font-size:12.5px;padding:5px 13px;border-radius:14px;border:1.4px solid var(--jade);color:var(--jade);background:var(--jade-soft);cursor:pointer;font-family:inherit;}
+  .designated-chip:hover,.designated-chip.selected{background:var(--jade);color:#fff;}
+  .total-display{background:var(--paper-edge);border:1.3px solid var(--rule);border-radius:3px;padding:12px 14px;display:flex;justify-content:space-between;align-items:baseline;}
+  .total-display .total-label{font-size:12px;color:var(--ink-soft);}
+  .total-display .total-num{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;color:var(--ink);}
+
+  /* last saved banner */
+  .last-saved{font-size:11.5px;color:var(--jade);margin-left:auto;opacity:.85;}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="empty">載入中…</div>
+</div>
+<div class="page-form" id="pageFormAdd"></div>
+<div class="page-form" id="pageFormEdit"></div>
+
+<script>
+const STORAGE_KEY = 'tracker-data';
+const DEFAULT_STEPS = ['申請人','經辦人','財務組長','會長','校長','出納'];
+const UNIT_OPTIONS = ['家長會','故事團','課輔團','導護團','綠手指','其他'];
+const DEFAULT_DESIGNATED = ['合唱','田徑'];
+
+let state = { steps: [...DEFAULT_STEPS], items: [], designatedAccounts: [...DEFAULT_DESIGNATED] };
+let ui = { search:'', statusFilter:'all', openItemId:null, modal:null, editItemId:null };
+let tempListEdit = [];
+
+async function loadData(){
+  try{
+    const res = await window.storage.get(STORAGE_KEY);
+    if(res && res.value){
+      state = JSON.parse(res.value);
+      if(!state.steps) state.steps=[...DEFAULT_STEPS];
+      if(!state.designatedAccounts) state.designatedAccounts=[...DEFAULT_DESIGNATED];
+    }
+  }catch(e){ /* no data yet */ }
+  if(!state.nextNo){ state.nextNo = state.items.length + 1; }
+  if(!state.requesterList){ state.requesterList = knownRequesters(); }
+  if(!state.itemList){ state.itemList = knownItems(); }
+  render();
+}
+async function saveData(){
+  try{
+    state.lastSaved = new Date().toISOString();
+    await window.storage.set(STORAGE_KEY, JSON.stringify(state));
+  }
+  catch(e){ console.error('儲存失敗', e); }
+}
+
+async function loadAttachments(itemId){
+  try{
+    const res = await window.storage.get('attach:'+itemId);
+    return res && res.value ? JSON.parse(res.value) : [];
+  }catch(e){ return []; }
+}
+async function saveAttachments(itemId, list){
+  try{ await window.storage.set('attach:'+itemId, JSON.stringify(list)); return true; }
+  catch(e){ console.error('附件儲存失敗', e); alert('附件儲存失敗，可能是檔案太大，請改用較小的圖片或先壓縮。'); return false; }
+}
+async function deleteAttachments(itemId){
+  try{ await window.storage.delete('attach:'+itemId); }catch(e){ /* ignore */ }
+}
+function fileSizeLabel(bytes){
+  if(bytes < 1024) return bytes+' B';
+  if(bytes < 1024*1024) return (bytes/1024).toFixed(1)+' KB';
+  return (bytes/1024/1024).toFixed(2)+' MB';
+}
+async function handleFileUpload(it, files){
+  const current = await loadAttachments(it.id);
+  let currentSize = current.reduce((s,a)=>s+a.size,0);
+  for(const file of files){
+    if(currentSize + file.size > 4.5*1024*1024){
+      alert(`「${file.name}」未加入：此筆附件總大小已接近 5MB 上限，請壓縮圖片或分開保存。`);
+      continue;
+    }
+    const dataUrl = await new Promise((resolve,reject)=>{
+      const r = new FileReader();
+      r.onload = ()=>resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+    current.push({id:'a'+Date.now()+Math.random().toString(36).slice(2,5), name:file.name, type:file.type, size:file.size, dataUrl});
+    currentSize += file.size;
+  }
+  await saveAttachments(it.id, current);
+  return current;
+}
+
+function peekNextNo(){
+  return 'No.' + String(state.nextNo||1).padStart(3,'0');
+}
+
+function computeTotalAmount(amount, payMethod, transferFee){
+  return (Number(amount)||0) + (payMethod==='匯款' ? (Number(transferFee)||0) : 0);
+}
+
+function newItem(data){
+  return {
+    id: 'r' + Date.now() + Math.random().toString(36).slice(2,6),
+    no: data.no, date: data.date, requester: data.requester,
+    unit: data.unit||'', unitOther: data.unitOther||'',
+    item: data.item, amount: data.amount,
+    payMethod: data.payMethod||'現金', transferFee: data.transferFee||'',
+    totalAmount: computeTotalAmount(data.amount, data.payMethod, data.transferFee),
+    designated: !!data.designated, designatedUnit: data.designatedUnit||'',
+    notes: data.notes||'', returned:false,
+    stepStatus: state.steps.map(()=>({done:false, signer:'', time:''}))
+  };
+}
+function unitLabel(it){
+  if(!it.unit) return '';
+  return it.unit==='其他' ? (it.unitOther||'其他') : it.unit;
+}
+function knownRequesters(){
+  return [...new Set(state.items.map(i=>i.requester).filter(Boolean))];
+}
+function knownItems(){
+  return [...new Set(state.items.map(i=>i.item).filter(Boolean))];
+}
+function itemsForRequester(name){
+  if(!name) return [];
+  return [...new Set(state.items.filter(i=>i.requester===name).map(i=>i.item).filter(Boolean))];
+}
+function renderItemChipsHTML(requesterName){
+  const personal = itemsForRequester(requesterName);
+  if(personal.length){
+    return `<div class="attach-hint" style="margin-bottom:4px">${escapeHtml(requesterName)} 之前申請過：</div>
+      <div class="chip-row">${personal.map(i=>`<button type="button" class="chip" data-pick-item="${escapeHtml(i)}">${escapeHtml(i)}</button>`).join('')}</div>`;
+  }
+  if(state.itemList && state.itemList.length){
+    return `<div class="chip-row">${state.itemList.map(i=>`<button type="button" class="chip" data-pick-item="${escapeHtml(i)}">${escapeHtml(i)}</button>`).join('')}</div>`;
+  }
+  return `<div class="attach-hint">尚無常用項目，輸入並儲存後會自動加入清單</div>`;
+}
+
+function exportCSV(){
+  const header = ['單號','日期(民國)','申請單位','申請人','項目用途','金額','支付方式','匯費','總計','指定捐款','指定單位','狀態','備註'];
+  state.steps.forEach(s=>{ header.push(s+'_簽核人', s+'_時間'); });
+  const rows = [header];
+  state.items.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(it=>{
+    const row = [
+      it.no, isoToMinguo(it.date), unitLabel(it), it.requester, it.item,
+      it.amount, it.payMethod, it.transferFee||'', (it.totalAmount!==undefined? it.totalAmount: it.amount),
+      it.designated?'是':'否', it.designatedUnit||'', statusLabel[itemStatus(it)], it.notes||''
+    ];
+    it.stepStatus.forEach(s=>{
+      row.push(s.signer||'');
+      row.push(s.time? new Date(s.time).toLocaleString('zh-TW',{hour12:false}) : '');
+    });
+    rows.push(row);
+  });
+  const csv = rows.map(r=> r.map(cell=>{
+    const str = String(cell===undefined||cell===null? '' : cell);
+    return /[",\n]/.test(str) ? '"'+str.replace(/"/g,'""')+'"' : str;
+  }).join(',')).join('\r\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const now = new Date();
+  a.href = url;
+  a.download = `請購單簽核紀錄_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function parseCSVText(text){
+  text = text.replace(/^\uFEFF/, '');
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i], next = text[i+1];
+    if(inQuotes){
+      if(c==='"' && next==='"'){ field+='"'; i++; }
+      else if(c==='"'){ inQuotes=false; }
+      else { field+=c; }
+    } else {
+      if(c==='"'){ inQuotes=true; }
+      else if(c===','){ row.push(field); field=''; }
+      else if(c==='\r'){ /* skip */ }
+      else if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else { field+=c; }
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r=> r.length>1 || (r.length===1 && r[0]!==''));
+}
+
+function minguoStrToISO(str){
+  if(!str) return '';
+  const m = str.match(/(\d+)[\/\-](\d+)[\/\-](\d+)/);
+  if(!m) return '';
+  return minguoToISO(m[1], m[2], m[3]);
+}
+
+async function importCSV(file){
+  const text = await file.text();
+  const rows = parseCSVText(text);
+  if(rows.length < 2){ alert('檔案內容是空的，或格式無法辨識。'); return; }
+  const header = rows[0];
+  const idx = name => header.indexOf(name);
+  const required = ['單號','日期(民國)','申請人'];
+  if(required.some(r=>idx(r)===-1)){
+    alert('找不到必要欄位（單號／日期(民國)／申請人），請確認匯入的是本工具匯出的 CSV 檔。');
+    return;
+  }
+  const existingNos = new Set(state.items.map(i=>i.no));
+  let added = 0, skipped = 0;
+  for(let r=1;r<rows.length;r++){
+    const row = rows[r];
+    const get = name => { const i = idx(name); return i===-1 ? '' : (row[i]||''); };
+    const no = get('單號');
+    if(!no || existingNos.has(no)){ skipped++; continue; }
+    const data = {
+      no,
+      date: minguoStrToISO(get('日期(民國)')),
+      unit: UNIT_OPTIONS.includes(get('申請單位')) ? get('申請單位') : (get('申請單位') ? '其他' : ''),
+      unitOther: UNIT_OPTIONS.includes(get('申請單位')) ? '' : get('申請單位'),
+      requester: get('申請人'),
+      item: get('項目用途'),
+      amount: get('金額'),
+      payMethod: get('支付方式') || '現金',
+      transferFee: get('匯費'),
+      designated: get('指定捐款')==='是',
+      designatedUnit: get('指定單位'),
+      notes: get('備註')
+    };
+    if(!data.requester){ skipped++; continue; }
+    const item = newItem(data);
+    state.items.push(item);
+    existingNos.add(no);
+    if(!state.requesterList) state.requesterList = [];
+    if(!state.itemList) state.itemList = [];
+    if(data.requester && !state.requesterList.includes(data.requester)) state.requesterList.push(data.requester);
+    if(data.item && !state.itemList.includes(data.item)) state.itemList.push(data.item);
+    added++;
+  }
+  await saveData();
+  render();
+  alert(`匯入完成：新增 ${added} 筆，略過 ${skipped} 筆（單號重複或資料不完整）。\n附加文件與簽核進度不會匯入，請於明細頁個別補上。`);
+}
+
+function itemStatus(it){
+  if(it.returned) return 'returned';
+  const doneCount = it.stepStatus.filter(s=>s.done).length;
+  if(doneCount===0) return 'pending';
+  if(doneCount===state.steps.length) return 'done';
+  return 'progress';
+}
+const statusLabel = {pending:'待簽核', progress:'進行中', done:'已完成', returned:'已退回'};
+
+function isoToMinguo(iso){
+  if(!iso) return '';
+  const parts = iso.split('-');
+  if(parts.length!==3) return iso;
+  const [y,m,d] = parts.map(Number);
+  return `${y-1911}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}`;
+}
+function minguoToISO(my,m,d){
+  const gy = Number(my) + 1911;
+  return `${gy}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function todayMinguo(){
+  const now = new Date();
+  return { y: now.getFullYear()-1911, m: now.getMonth()+1, d: now.getDate() };
+}
+
+function escapeHtml(s){
+  return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function computeStats(){
+  const items = state.items;
+  const pending = items.filter(i=>itemStatus(i)==='pending').length;
+  const progress = items.filter(i=>itemStatus(i)==='progress').length;
+  const now = new Date();
+  const thisMonthDone = items.filter(i=>{
+    if(itemStatus(i)!=='done') return false;
+    const last = i.stepStatus[i.stepStatus.length-1];
+    if(!last.time) return false;
+    const t = new Date(last.time);
+    return t.getMonth()===now.getMonth() && t.getFullYear()===now.getFullYear();
+  }).length;
+  const totalAmount = items.reduce((sum,i)=> sum + (Number(i.totalAmount!==undefined? i.totalAmount : i.amount)||0), 0);
+  return {pending, progress, thisMonthDone, totalAmount};
+}
+
+function filteredItems(){
+  return state.items.filter(it=>{
+    if(ui.statusFilter!=='all' && itemStatus(it)!==ui.statusFilter) return false;
+    if(ui.search){
+      const s = ui.search.toLowerCase();
+      const hay = [it.no,it.requester,it.item,unitLabel(it)].join(' ').toLowerCase();
+      if(!hay.includes(s)) return false;
+    }
+    return true;
+  }).sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+}
+
+function render(){
+  const app = document.getElementById('app');
+  const stats = computeStats();
+  const items = filteredItems();
+
+  app.innerHTML = `
+    <header>
+      <div>
+        <h1>請購單暨黏貼憑證　簽核紀錄</h1>
+        <p class="sub">家長會財務組・六步驟簽核流程追蹤${state.lastSaved ? `　<span class="last-saved">✓ 上次儲存：${new Date(state.lastSaved).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>` : ''}</p>
+      </div>
+      <div class="actions">
+        <button class="btn-ghost" id="btnImport">匯入資料</button>
+        <input type="file" id="importFileInput" accept=".csv" style="display:none">
+        <button class="btn-ghost" id="btnExport">匯出資料</button>
+        <button class="btn-ghost" id="btnStartNo">設定起始編號</button>
+        <button class="btn-ghost" id="btnManageDesignated">管理指定捐款帳戶</button>
+        <button class="btn-ghost" id="btnManageRequesters">管理申請人</button>
+        <button class="btn-ghost" id="btnManageItems">管理項目／用途</button>
+        <button class="btn-ghost" id="btnSteps">編輯簽核角色</button>
+        <button class="btn" id="btnAdd">＋ 新增請購單</button>
+      </div>
+    </header>
+
+    <div class="stats">
+      <div class="stat pending"><div class="num">${stats.pending}</div><div class="label">待簽核</div></div>
+      <div class="stat progress"><div class="num">${stats.progress}</div><div class="label">進行中</div></div>
+      <div class="stat done"><div class="num">${stats.thisMonthDone}</div><div class="label">本月已完成</div></div>
+      <div class="stat"><div class="num" style="font-size:20px">${stats.totalAmount.toLocaleString()}</div><div class="label">金額總額</div></div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="搜尋單號、申請人、項目…" value="${escapeHtml(ui.search)}">
+      <select id="filter">
+        <option value="all" ${ui.statusFilter==='all'?'selected':''}>全部狀態</option>
+        <option value="pending" ${ui.statusFilter==='pending'?'selected':''}>待簽核</option>
+        <option value="progress" ${ui.statusFilter==='progress'?'selected':''}>進行中</option>
+        <option value="done" ${ui.statusFilter==='done'?'selected':''}>已完成</option>
+        <option value="returned" ${ui.statusFilter==='returned'?'selected':''}>已退回</option>
+      </select>
+    </div>
+
+    ${items.length===0 ? `
+      <div class="empty">
+        <div class="big">尚無紀錄</div>
+        <div>點擊「新增請購單」開始記錄第一筆簽核流程。</div>
+      </div>
+    ` : `
+      <table>
+        <thead>
+          <tr><th>單號</th><th>日期</th><th>申請單位</th><th>申請人</th><th>項目</th><th style="text-align:right">金額</th><th>進度</th><th>狀態</th></tr>
+        </thead>
+        <tbody>
+          ${items.map(it=>{
+            const st = itemStatus(it);
+            return `<tr data-id="${it.id}">
+              <td class="no">${escapeHtml(it.no)}</td>
+              <td>${isoToMinguo(it.date)}</td>
+              <td><span class="unit-badge">${escapeHtml(unitLabel(it))||'—'}</span></td>
+              <td>${escapeHtml(it.requester)}</td>
+              <td>${escapeHtml(it.item)}</td>
+              <td class="amt">${it.amount? Number(it.amount).toLocaleString():''}</td>
+              <td><div class="dots">${it.stepStatus.map(s=>`<div class="dot ${s.done?'on':''}"></div>`).join('')}</div></td>
+              <td><span class="pill ${st}">${statusLabel[st]}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    `}
+  `;
+
+  document.getElementById('btnAdd').onclick = ()=>{ openPageForm('add'); };
+  document.getElementById('btnSteps').onclick = ()=>{ ui.modal='steps'; renderModal(); };
+  document.getElementById('btnStartNo').onclick = ()=>{ ui.modal='startNo'; renderModal(); };
+  document.getElementById('btnManageRequesters').onclick = ()=>{ tempListEdit = [...(state.requesterList||[])]; ui.modal='manageRequesters'; renderModal(); };
+  document.getElementById('btnManageItems').onclick = ()=>{ tempListEdit = [...(state.itemList||[])]; ui.modal='manageItems'; renderModal(); };
+  document.getElementById('btnManageDesignated').onclick = ()=>{ tempListEdit = [...(state.designatedAccounts||[])]; ui.modal='manageDesignated'; renderModal(); };
+  document.getElementById('btnExport').onclick = exportCSV;
+  document.getElementById('btnImport').onclick = ()=>{ document.getElementById('importFileInput').click(); };
+  document.getElementById('importFileInput').onchange = (e)=>{
+    if(e.target.files && e.target.files[0]){ importCSV(e.target.files[0]); }
+    e.target.value = '';
+  };
+  document.getElementById('search').oninput = (e)=>{ ui.search = e.target.value; render(); };
+  document.getElementById('filter').onchange = (e)=>{ ui.statusFilter = e.target.value; render(); };
+  document.querySelectorAll('tbody tr').forEach(tr=>{
+    tr.onclick = ()=>{ ui.openItemId = tr.dataset.id; renderDetail(); };
+  });
+}
+
+function closeOverlayLayer(idSuffix){
+  const el = document.getElementById('overlay-'+idSuffix);
+  if(el) el.remove();
+}
+
+async function renderDetail(){
+  closeOverlayLayer('detail');
+  const it = state.items.find(i=>i.id===ui.openItemId);
+  if(!it) return;
+  const attachments = await loadAttachments(it.id);
+
+  const div = document.createElement('div');
+  div.className='overlay';
+  div.id='overlay-detail';
+  div.innerHTML = `
+    <div class="panel">
+      <h2>${escapeHtml(it.no)} ${escapeHtml(it.item)}<button class="close" id="closeDetail">×</button></h2>
+      ${it.returned? `<div class="returned-banner">此筆已退回，請修正後重新送出</div>`:''}
+      <div class="meta-line">
+        申請人：<b>${escapeHtml(it.requester)}</b>　申請單位：<b>${escapeHtml(unitLabel(it))||'—'}</b>　日期：<b>${isoToMinguo(it.date)}</b><br>
+        支付方式：<b>${escapeHtml(it.payMethod)||'—'}</b>${it.payMethod==='匯款' && it.transferFee? `　匯費：<b>${Number(it.transferFee).toLocaleString()}</b>`:''}<br>
+        金額：<b>${it.amount? Number(it.amount).toLocaleString():'—'}</b>${it.payMethod==='匯款' && Number(it.transferFee)>0? `　總計（含匯費）：<b>${Number(it.totalAmount||it.amount).toLocaleString()}</b>`:''}<br>
+        ${it.designated? `指定捐款：<b>是</b>${it.designatedUnit? `　指定單位：<b>${escapeHtml(it.designatedUnit)}</b>`:''}<br>`:''}
+        ${it.notes? `備註：${escapeHtml(it.notes)}`:''}
+      </div>
+
+      <div class="stepper">
+        ${state.steps.map((label,idx)=>{
+          const s = it.stepStatus[idx];
+          const isNext = !s.done && it.stepStatus.slice(0,idx).every(x=>x.done);
+          return `
+          <div class="step">
+            <div class="chop ${s.done?'done':(isNext?'pending':'')}" data-step="${idx}" ${isNext?'data-action="mark"':''}>
+              ${s.done? '✓' : (isNext? '<span style="opacity:.4">✓</span>' : (idx+1))}
+            </div>
+            <div class="step-body">
+              <div class="step-name">${escapeHtml(label)}</div>
+              ${s.done
+                ? `<div class="step-detail">${s.signer? escapeHtml(s.signer)+'・':''}${s.time? new Date(s.time).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):''}</div>`
+                : isNext
+                  ? `<div class="step-hint">點擊勾選方塊標記完成</div>
+                     <div class="sign-form">
+                       <input type="text" placeholder="簽核人（選填）" data-signer="${idx}">
+                       <button data-confirm="${idx}">標記完成</button>
+                     </div>`
+                  : `<div class="step-detail" style="color:var(--ink-soft)">尚未輪到</div>`
+              }
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <div class="attach-section">
+        <h3>附加文件（收據／憑證）</h3>
+        <div class="attach-list">
+          ${attachments.length===0 ? '' : attachments.map(a=>`
+            <div class="attach-item">
+              <a href="${a.dataUrl}" download="${escapeHtml(a.name)}" target="_blank">📎 ${escapeHtml(a.name)}</a>
+              <span class="sz">${fileSizeLabel(a.size)}</span>
+              <button data-removeattach="${a.id}">移除</button>
+            </div>`).join('')}
+        </div>
+        <input type="file" id="fileInput" class="attach-upload" multiple>
+        <div class="attach-hint">檔案會儲存在此處，僅你自己可見。單筆請購單建議總大小不超過 5MB，掃描收據建議先壓縮。</div>
+      </div>
+
+      <div class="panel-footer">
+        <button class="btn-ghost" id="btnEdit">編輯內容</button>
+        ${!it.returned ? `<button class="btn-ghost" id="btnReturn">標記退回</button>` : `<button class="btn-ghost" id="btnUnreturn">取消退回</button>`}
+        <button class="btn-ghost danger" id="btnDelete">刪除此筆</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(div);
+
+  document.getElementById('closeDetail').onclick = ()=>{ closeOverlayLayer('detail'); };
+  div.onclick = (e)=>{ if(e.target===div) closeOverlayLayer('detail'); };
+  document.getElementById('btnEdit').onclick = ()=>{ openPageForm('edit', it.id); };
+
+  div.querySelectorAll('[data-action="mark"]').forEach(chop=>{
+    chop.onclick = ()=>{
+      const idx = Number(chop.dataset.step);
+      const input = div.querySelector(`[data-signer="${idx}"]`);
+      markStepDone(it, idx, input? input.value : '');
+    };
+  });
+  div.querySelectorAll('[data-confirm]').forEach(btn=>{
+    btn.onclick = (e)=>{
+      e.stopPropagation();
+      const idx = Number(btn.dataset.confirm);
+      const input = div.querySelector(`[data-signer="${idx}"]`);
+      markStepDone(it, idx, input? input.value : '');
+    };
+  });
+
+  document.getElementById('fileInput').onchange = async (e)=>{
+    if(e.target.files.length){ await handleFileUpload(it, Array.from(e.target.files)); renderDetail(); }
+  };
+  div.querySelectorAll('[data-removeattach]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const list = attachments.filter(a=>a.id!==btn.dataset.removeattach);
+      await saveAttachments(it.id, list);
+      renderDetail();
+    };
+  });
+
+  const returnBtn = document.getElementById('btnReturn');
+  if(returnBtn) returnBtn.onclick = ()=>{ it.returned = true; saveData(); render(); renderDetail(); };
+  const unreturnBtn = document.getElementById('btnUnreturn');
+  if(unreturnBtn) unreturnBtn.onclick = ()=>{ it.returned = false; saveData(); render(); renderDetail(); };
+  document.getElementById('btnDelete').onclick = ()=>{
+    if(confirm('確定要刪除此筆紀錄嗎？此動作無法復原，附加文件也會一併刪除。')){
+      state.items = state.items.filter(x=>x.id!==it.id);
+      deleteAttachments(it.id);
+      saveData(); closeOverlayLayer('detail'); render();
+    }
+  };
+}
+
+function markStepDone(it, idx, signer){
+  it.stepStatus[idx] = {done:true, signer: signer||'', time: new Date().toISOString()};
+  saveData();
+  render();
+  renderDetail();
+}
+
+function renderModal(){
+  closeOverlayLayer('modal');
+  const div = document.createElement('div');
+  div.className='overlay center';
+  div.id='overlay-modal';
+
+  if(ui.modal==='steps'){
+    div.innerHTML = `
+      <div class="modal">
+        <h2>編輯簽核角色<button class="close" id="closeModal">×</button></h2>
+        ${state.steps.map((s,i)=>`<div class="field"><label>第 ${i+1} 步</label><input type="text" data-stepedit="${i}" value="${escapeHtml(s)}"></div>`).join('')}
+        <div class="panel-footer">
+          <button class="btn" id="saveSteps">儲存</button>
+          <button class="btn-ghost" id="cancelSteps">取消</button>
+        </div>
+      </div>`;
+    document.body.appendChild(div);
+    document.getElementById('closeModal').onclick = ()=>closeOverlayLayer('modal');
+    document.getElementById('cancelSteps').onclick = ()=>closeOverlayLayer('modal');
+    div.onclick=(e)=>{ if(e.target===div) closeOverlayLayer('modal'); };
+    document.getElementById('saveSteps').onclick = ()=>{
+      const inputs = div.querySelectorAll('[data-stepedit]');
+      inputs.forEach(inp=>{ state.steps[Number(inp.dataset.stepedit)] = inp.value.trim() || state.steps[Number(inp.dataset.stepedit)]; });
+      saveData(); closeOverlayLayer('modal'); render();
+    };
+  }
+
+  if(ui.modal==='manageRequesters' || ui.modal==='manageItems' || ui.modal==='manageDesignated'){
+    const title = ui.modal==='manageRequesters' ? '管理申請人清單' : ui.modal==='manageItems' ? '管理項目／用途清單' : '管理指定捐款帳戶';
+    const hint = ui.modal==='manageDesignated' ? '勾選指定捐款時會顯示這些帳戶名稱供快速選擇；預設包含「合唱」「田徑」。' : '送出新請購單時，新輸入的名稱會自動加入這份清單；這裡可手動新增、修改或刪除。';
+    const syncFromDOM = ()=>{
+      div.querySelectorAll('[data-templist]').forEach(inp=>{ tempListEdit[Number(inp.dataset.templist)] = inp.value; });
+    };
+    div.innerHTML = `
+      <div class="modal">
+        <h2>${title}<button class="close" id="closeModal">×</button></h2>
+        <div class="attach-hint" style="margin-bottom:12px">${hint}</div>
+        <div id="tempListWrap">
+          ${tempListEdit.length===0 ? `<div class="attach-hint" style="margin-bottom:10px">尚無項目，點擊下方「＋ 新增一筆」開始建立。</div>` : ''}
+          ${tempListEdit.map((v,i)=>`<div class="field" style="display:flex;gap:6px;align-items:center;">
+            <input type="text" data-templist="${i}" value="${escapeHtml(v)}" style="flex:1">
+            <button type="button" data-removetemp="${i}" style="background:none;border:none;color:var(--returned);font-size:12px;flex:none;">移除</button>
+          </div>`).join('')}
+        </div>
+        <button class="btn-ghost" type="button" id="addTempEntry" style="margin-bottom:16px;">＋ 新增一筆</button>
+        <div class="panel-footer">
+          <button class="btn" id="saveTempList">儲存</button>
+          <button class="btn-ghost" id="cancelTempList">取消</button>
+        </div>
+      </div>`;
+    document.body.appendChild(div);
+    document.getElementById('closeModal').onclick = ()=>closeOverlayLayer('modal');
+    document.getElementById('cancelTempList').onclick = ()=>closeOverlayLayer('modal');
+    div.onclick=(e)=>{ if(e.target===div) closeOverlayLayer('modal'); };
+    document.getElementById('addTempEntry').onclick = ()=>{
+      syncFromDOM(); tempListEdit.push(''); renderModal();
+    };
+    div.querySelectorAll('[data-removetemp]').forEach(btn=>{
+      btn.onclick = ()=>{ syncFromDOM(); tempListEdit.splice(Number(btn.dataset.removetemp),1); renderModal(); };
+    });
+    document.getElementById('saveTempList').onclick = ()=>{
+      syncFromDOM();
+      const cleaned = [...new Set(tempListEdit.map(v=>v.trim()).filter(Boolean))];
+      if(ui.modal==='manageRequesters'){ state.requesterList = cleaned; }
+      else if(ui.modal==='manageItems'){ state.itemList = cleaned; }
+      else { state.designatedAccounts = cleaned; }
+      saveData(); closeOverlayLayer('modal'); render();
+    };
+  }
+
+  if(ui.modal==='startNo'){
+    div.innerHTML = `
+      <div class="modal">
+        <h2>設定起始編號<button class="close" id="closeModal">×</button></h2>
+        <div class="field">
+          <label>下一筆請購單將使用的編號</label>
+          <input type="number" id="f_startNo" value="${state.nextNo||1}" min="1">
+        </div>
+        <div class="attach-hint">此設定只影響「下一筆新增」開始的編號，不會更改已建立的請購單單號。</div>
+        <div class="panel-footer">
+          <button class="btn" id="saveStartNo">儲存</button>
+          <button class="btn-ghost" id="cancelStartNo">取消</button>
+        </div>
+      </div>`;
+    document.body.appendChild(div);
+    document.getElementById('closeModal').onclick = ()=>closeOverlayLayer('modal');
+    document.getElementById('cancelStartNo').onclick = ()=>closeOverlayLayer('modal');
+    div.onclick=(e)=>{ if(e.target===div) closeOverlayLayer('modal'); };
+    document.getElementById('saveStartNo').onclick = ()=>{
+      const v = Number(document.getElementById('f_startNo').value);
+      if(!v || v<1){ alert('請輸入有效的編號'); return; }
+      state.nextNo = v; saveData(); closeOverlayLayer('modal'); render();
+    };
+  }
+}
+
+function buildFormHTML(mode, it){
+  const mDate = (it && it.date) ? (()=>{ const [y,m,d]=it.date.split('-').map(Number); return {y:y-1911,m,d}; })() : todayMinguo();
+  const v = f => it ? escapeHtml(it[f]||'') : '';
+  const accts = state.designatedAccounts||[];
+  const selAcct = (it && it.designated) ? (it.designatedUnit||'') : '';
+  return `
+  <div class="page-form-header">
+    <h2>${mode==='add' ? '新增請購單' : '編輯請購單'}</h2>
+    <button class="btn-ghost" id="pfClose">取消，返回列表</button>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">基本資訊</div>
+    <div class="row2">
+      <div class="field"><label>單號</label>
+        <input type="text" id="f_no" value="${mode==='add' ? peekNextNo() : v('no')}" ${mode==='add' ? 'readonly style="background:var(--paper-edge);color:var(--ink-soft)"' : ''}>
+      </div>
+      <div class="field"><label>日期（民國）</label>
+        <div style="display:flex;gap:5px;align-items:center;">
+          <input type="number" id="f_dateY" value="${mDate.y}" min="1" style="width:62px">
+          <span style="color:var(--ink-soft)">年</span>
+          <select id="f_dateM">${Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}" ${m===mDate.m?'selected':''}>${m}</option>`).join('')}</select>
+          <span style="color:var(--ink-soft)">月</span>
+          <select id="f_dateD">${Array.from({length:31},(_,i)=>i+1).map(d=>`<option value="${d}" ${d===mDate.d?'selected':''}>${d}</option>`).join('')}</select>
+          <span style="color:var(--ink-soft)">日</span>
+        </div>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>申請單位</label>
+        <select id="f_unit">
+          ${UNIT_OPTIONS.map(u=>`<option value="${u}" ${(it&&it.unit===u)?'selected':''}>${u}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" id="f_unitOtherWrap" style="display:${(it&&it.unit==='其他')?'block':'none'}">
+        <label>其他單位名稱</label><input type="text" id="f_unitOther" value="${v('unitOther')}">
+      </div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">請購人</div>
+    <div class="field">
+      <label>申請人</label>
+      <input type="text" id="f_requester" value="${v('requester')}" placeholder="輸入申請人姓名" autocomplete="off">
+      ${(state.requesterList&&state.requesterList.length) ? `<div class="chip-row">${state.requesterList.map(r=>`<button type="button" class="chip" data-pick-requester="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('')}</div>` : `<div class="attach-hint">尚無常用申請人，輸入並儲存後自動加入</div>`}
+    </div>
+    <div class="field">
+      <label>項目／用途</label>
+      <input type="text" id="f_item" value="${v('item')}" placeholder="輸入項目／用途" autocomplete="off">
+      <div id="itemChipsWrap">${renderItemChipsHTML(it ? it.requester : '')}</div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">金額與支付</div>
+    <div class="field"><label>支付方式</label>
+      <div class="radio-group">
+        <label><input type="radio" name="f_pay" value="現金" ${(!it||it.payMethod==='現金')?'checked':''}>現金</label>
+        <label><input type="radio" name="f_pay" value="匯款" ${(it&&it.payMethod==='匯款')?'checked':''}>匯款</label>
+      </div>
+    </div>
+    <div class="field" id="f_feeWrap" style="display:${(it&&it.payMethod==='匯款')?'block':'none'}">
+      <label>匯費</label><input type="number" id="f_transferFee" value="${it ? (it.transferFee||0) : 0}">
+    </div>
+    <div class="field"><label>金額</label><input type="number" id="f_amount" value="${it ? (it.amount||0) : 0}"></div>
+    <div class="total-display">
+      <span class="total-label">總計（金額＋匯費）</span>
+      <span class="total-num" id="f_total">${it ? Number(it.totalAmount!==undefined?it.totalAmount:it.amount||0).toLocaleString() : '0'}</span>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">指定捐款</div>
+    <div class="field" style="margin-bottom:6px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="f_designated" ${(it&&it.designated)?'checked':''}> 此筆為指定捐款
+      </label>
+    </div>
+    <div id="f_designatedUnitWrap" style="display:${(it&&it.designated)?'block':'none'}">
+      <div class="field"><label>指定帳戶／單位</label><input type="text" id="f_designatedUnit" value="${v('designatedUnit')}" placeholder="選擇或手動輸入"></div>
+      ${accts.length ? `<div class="designated-chips">${accts.map(a=>`<button type="button" class="designated-chip${a===selAcct?' selected':''}" data-pick-desig="${escapeHtml(a)}">${escapeHtml(a)}</button>`).join('')}</div>` : `<div class="attach-hint">可至「管理指定捐款帳戶」新增帳戶名稱</div>`}
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">備註與附件</div>
+    <div class="field"><label>備註（選填）</label><textarea id="f_notes">${v('notes')}</textarea></div>
+    <div class="field"><label>上傳憑證／收據</label>
+      <input type="file" id="f_files" multiple>
+      <div class="attach-hint">可補加，明細頁也可另行上傳</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-top:8px;">
+    <button class="btn" id="pfSave" style="min-width:100px">${mode==='add'?'儲存請購單':'儲存修改'}</button>
+    <button class="btn-ghost" id="pfCancel">取消</button>
+  </div>`;
+}
+
+function wireForm(container, mode, it){
+  container.querySelector('#pfClose').onclick = closePageForm;
+  container.querySelector('#pfCancel').onclick = closePageForm;
+  container.querySelector('#f_unit').onchange = (e)=>{
+    container.querySelector('#f_unitOtherWrap').style.display = e.target.value==='其他' ? 'block':'none';
+  };
+  // designated toggle
+  const desigCheck = container.querySelector('#f_designated');
+  const desigWrap = container.querySelector('#f_designatedUnitWrap');
+  const desigInput = container.querySelector('#f_designatedUnit');
+  desigCheck.onchange = ()=>{
+    desigWrap.style.display = desigCheck.checked ? 'block' : 'none';
+    if(desigCheck.checked && !desigInput.value && (state.designatedAccounts||[]).length){
+      // leave blank — user picks from chip or types
+    }
+  };
+  container.querySelectorAll('[data-pick-desig]').forEach(btn=>{
+    btn.onclick = ()=>{
+      desigInput.value = btn.dataset.pickDesig;
+      container.querySelectorAll('[data-pick-desig]').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+    };
+  });
+  // requester chips
+  container.querySelectorAll('[data-pick-requester]').forEach(btn=>{
+    btn.onclick = ()=>{ container.querySelector('#f_requester').value = btn.dataset.pickRequester; refreshItems(); };
+  });
+  const bindItemChips = ()=>{
+    container.querySelectorAll('[data-pick-item]').forEach(btn=>{
+      btn.onclick = ()=>{ container.querySelector('#f_item').value = btn.dataset.pickItem; };
+    });
+  };
+  const refreshItems = ()=>{
+    container.querySelector('#itemChipsWrap').innerHTML = renderItemChipsHTML(container.querySelector('#f_requester').value.trim());
+    bindItemChips();
+  };
+  bindItemChips();
+  container.querySelector('#f_requester').addEventListener('input', refreshItems);
+  container.querySelector('#f_requester').addEventListener('blur', refreshItems);
+  // total
+  const updateTotal = ()=>{
+    const pay = container.querySelector('input[name="f_pay"]:checked').value;
+    container.querySelector('#f_feeWrap').style.display = pay==='匯款' ? 'block':'none';
+    const total = computeTotalAmount(
+      container.querySelector('#f_amount').value, pay,
+      container.querySelector('#f_transferFee').value
+    );
+    container.querySelector('#f_total').textContent = total.toLocaleString();
+  };
+  container.querySelectorAll('input[name="f_pay"]').forEach(r=>{ r.onchange = updateTotal; });
+  container.querySelector('#f_amount').oninput = updateTotal;
+  container.querySelector('#f_transferFee').oninput = updateTotal;
+  // save
+  container.querySelector('#pfSave').onclick = async ()=>{
+    const requester = container.querySelector('#f_requester').value.trim();
+    if(!requester){ alert('請至少填寫申請人'); return; }
+    const y = container.querySelector('#f_dateY').value;
+    const m = container.querySelector('#f_dateM').value;
+    const d = container.querySelector('#f_dateD').value;
+    const data = {
+      no: container.querySelector('#f_no').value.trim(),
+      date: minguoToISO(y,m,d),
+      unit: container.querySelector('#f_unit').value,
+      unitOther: container.querySelector('#f_unitOther').value.trim(),
+      requester,
+      item: container.querySelector('#f_item').value.trim(),
+      amount: container.querySelector('#f_amount').value,
+      payMethod: container.querySelector('input[name="f_pay"]:checked').value,
+      transferFee: container.querySelector('#f_transferFee').value,
+      designated: desigCheck.checked,
+      designatedUnit: desigInput.value.trim(),
+      notes: container.querySelector('#f_notes').value.trim()
+    };
+    if(!state.requesterList) state.requesterList = [];
+    if(!state.itemList) state.itemList = [];
+    if(data.requester && !state.requesterList.includes(data.requester)) state.requesterList.push(data.requester);
+    if(data.item && !state.itemList.includes(data.item)) state.itemList.push(data.item);
+    let savedItem;
+    if(mode==='add'){
+      savedItem = newItem(data);
+      state.items.push(savedItem);
+      state.nextNo = (state.nextNo||1) + 1;
+    } else {
+      Object.assign(it, data, { totalAmount: computeTotalAmount(data.amount, data.payMethod, data.transferFee) });
+      savedItem = it;
+    }
+    await saveData();
+    const filesInput = container.querySelector('#f_files');
+    if(filesInput && filesInput.files && filesInput.files.length){
+      await handleFileUpload(savedItem, Array.from(filesInput.files));
+    }
+    closePageForm();
+    render();
+    if(mode==='edit'){ ui.openItemId = savedItem.id; renderDetail(); }
+  };
+}
+
+function openPageForm(mode, itemId){
+  const containerId = mode==='add' ? 'pageFormAdd' : 'pageFormEdit';
+  const container = document.getElementById(containerId);
+  const it = (mode==='edit' && itemId) ? state.items.find(i=>i.id===itemId) : null;
+  container.innerHTML = `<div class="page-form-inner">${buildFormHTML(mode, it)}</div>`;
+  container.classList.add('active');
+  window.scrollTo(0,0);
+  wireForm(container, mode, it);
+}
+
+function closePageForm(){
+  document.querySelectorAll('.page-form').forEach(el=>{ el.classList.remove('active'); el.innerHTML=''; });
+}
+
+loadData();
+</script>
+</body>
+</html>
